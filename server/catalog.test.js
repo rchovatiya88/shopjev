@@ -1,6 +1,30 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { classifyIntent, handleRecommendations, handleSearch, searchCatalog } from './catalog.js'
+import { classifyIntent, handleRecommendations, handleSearch, parseShoppingQuery, searchCatalog } from './catalog.js'
+
+test('shopping query extracts a natural-language budget and retains product terms', () => {
+  assert.deepEqual(parseShoppingQuery('black coffee table that is under $100', 2000), { query: 'black coffee table', maxPrice: 100 })
+  assert.deepEqual(parseShoppingQuery('black coffee table under $100', 75), { query: 'black coffee table', maxPrice: 75 })
+})
+
+test('search applies a natural-language USD budget and ranks matching products first', async () => {
+  let searched
+  const result = await handleSearch({ query: 'black coffee table that is under $100', maxPrice: 2000 }, {
+    classifyIntent: async (query) => { assert.equal(query, 'black coffee table'); return { code: 'home', confidence: 1 } },
+    searchCatalog: async (query, options) => {
+      searched = { query, maxPrice: options.maxPrice }
+      return [
+        { id: 'wood', title: 'Coffee Table in Rustic Oak', variants: [{ price: { amount: 6999, currency: 'USD' } }] },
+        { id: 'black', title: 'Black Coffee Table', variants: [{ price: { amount: 7605, currency: 'USD' } }] },
+        { id: 'over', title: 'Black Coffee Table', variants: [{ price: { amount: 12000, currency: 'USD' } }] },
+        { id: 'foreign', title: 'Black Coffee Table', variants: [{ price: { amount: 5000, currency: 'AUD' } }] },
+      ]
+    },
+  })
+  assert.deepEqual(searched, { query: 'black coffee table', maxPrice: 100 })
+  assert.deepEqual(result.products.map((product) => product.id), ['black', 'wood'])
+  assert.deepEqual(result.filters, { maxPrice: 100, currency: 'USD' })
+})
 
 test('Jev receives only the shopper query, never catalog candidates', async () => {
   let request

@@ -76,7 +76,12 @@ function App() {
         return [...current, ...incoming.filter((product) => !seen.has(product.id))]
       })
       setPagination(body.pagination || null)
-      if (!append) { setIntent(body.intent || null); setJevAvailable(Boolean(body.jevAvailable)); setCategories([]) }
+      if (!append) {
+        setIntent(body.intent || null)
+        setJevAvailable(Boolean(body.jevAvailable))
+        setCategories([])
+        if (Number.isFinite(body.filters?.maxPrice)) setMaxPrice(body.filters.maxPrice)
+      }
     } catch (cause) {
       setProducts([])
       setIntent(null)

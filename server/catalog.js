@@ -87,6 +87,46 @@ function exactIdentifier(query) {
   return null
 }
 
+export function parseShoppingQuery(query, selectedMaxPrice = 2000) {
+  let maxPrice = selectedMaxPrice
+  const pricePattern = /\b(?:under|below|less\s+than|up\s+to|at\s+most|no\s+more\s+than|max(?:imum)?(?:\s+of)?)\s*\$\s*(\d+(?:\.\d{1,2})?)\b/ig
+  const cleanQuery = query.replace(pricePattern, (_match, amount) => {
+    const parsed = Number(amount)
+    if (Number.isFinite(parsed)) maxPrice = Math.min(maxPrice, parsed)
+    return ' '
+  }).replace(/\b(?:that\s+is|that's|priced|price)\b/ig, ' ').replace(/[\s,.;]+/g, ' ').trim()
+  return { query: cleanQuery || query.trim(), maxPrice }
+}
+
+function productSearchText(product) {
+  const mediaText = (product.media || []).map((item) => item.alt_text || '').join(' ')
+  const variantText = (product.variants || []).flatMap((variant) => [variant.title, variant.sku, ...(variant.options || []).map((option) => option.value)]).join(' ')
+  return [product.title, product.description, product.product_type, product.category?.name, product.category?.value, mediaText, variantText].filter(Boolean).join(' ').toLowerCase()
+}
+
+function relevanceScore(product, query) {
+  const title = String(product.title || '').toLowerCase()
+  const text = productSearchText(product)
+  const terms = query.toLowerCase().match(/[a-z0-9]+/g) || []
+  const meaningful = terms.filter((term) => !['that', 'is', 'a', 'an', 'the', 'for', 'with', 'and'].includes(term))
+  const phraseMatches = meaningful.length > 1 ? (title.includes(meaningful.join(' ')) ? 8 : 0) : 0
+  const coreMatches = meaningful.filter((term) => text.includes(term))
+  const titleMatches = meaningful.filter((term) => title.includes(term))
+  return phraseMatches + titleMatches.length * 4 + coreMatches.length * 2
+}
+
+function filterByUsdBudget(products, maxPrice) {
+  if (!Number.isFinite(maxPrice) || maxPrice >= 2000) return products
+  const ceiling = Math.round(maxPrice * 100)
+  return products.flatMap((product) => {
+    const usdVariants = (product.variants || []).filter((variant) => variant.price?.currency === 'USD' && Number(variant.price.amount) <= ceiling)
+    const rangePrice = product.price_range?.min
+    if (usdVariants.length) return [{ ...product, variants: usdVariants }]
+    if (!product.variants?.length && rangePrice?.currency === 'USD' && Number(rangePrice.amount) <= ceiling) return [product]
+    return []
+  })
+}
+
 function intentFromResponse(payload) {
   const data = payload?.answers?.intent
   const code = data?.choice
@@ -157,11 +197,12 @@ export async function lookupCatalog(id, options = {}) {
 }
 
 export async function handleSearch({ query, maxPrice, cursor }, deps = {}) {
+  const parsed = parseShoppingQuery(query, maxPrice)
   const id = exactIdentifier(query)
-  const intentTask = id || cursor ? Promise.resolve(null) : (deps.classifyIntent ?? classifyIntent)(query, deps.jevOptions).catch(() => null)
+  const intentTask = id || cursor ? Promise.resolve(null) : (deps.classifyIntent ?? classifyIntent)(parsed.query, deps.jevOptions).catch(() => null)
   const productTask = id?.startsWith('gid://')
     ? (deps.lookupCatalog ?? lookupCatalog)(id, deps.shopifyOptions)
-    : (deps.searchCatalog ?? searchCatalog)(query, { ...deps.shopifyOptions, maxPrice, cursor })
+    : (deps.searchCatalog ?? searchCatalog)(parsed.query, { ...deps.shopifyOptions, maxPrice: parsed.maxPrice, cursor })
   const [intent, foundProducts] = await Promise.all([intentTask, productTask])
   let products = Array.isArray(foundProducts) ? foundProducts : foundProducts.products || []
   const pagination = Array.isArray(foundProducts) ? null : foundProducts.pagination || null
@@ -176,7 +217,8 @@ export async function handleSearch({ query, maxPrice, cursor }, deps = {}) {
       variants: (product.variants || []).filter((variant) => Number(variant.price?.amount) <= Math.round(maxPrice * 100)),
     })).filter((product) => product.variants.length > 0)
   }
-  return { products, pagination, intent, jevAvailable: Boolean(intent) }
+  if (!id) products = filterByUsdBudget(products, parsed.maxPrice).sort((a, b) => relevanceScore(b, parsed.query) - relevanceScore(a, parsed.query))
+  return { products, pagination, intent, jevAvailable: Boolean(intent), filters: { maxPrice: parsed.maxPrice, currency: 'USD' } }
 }
 
 export async function handleRecommendations({ query, maxPrice }, deps = {}) {

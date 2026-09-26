@@ -2,7 +2,7 @@ import { createServer as createHttpServer } from 'node:http'
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { extname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { handleRecommendations, handleSearch } from './catalog.js'
+import { dispatchApi } from './api.js'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const dist = resolve(root, 'dist')
@@ -34,31 +34,16 @@ async function readJson(req) {
   try { return JSON.parse(raw || '{}') } catch { throw Object.assign(new Error('Request body must be valid JSON.'), { statusCode: 400 }) }
 }
 
-function validateInput(body) {
-  const query = typeof body.query === 'string' ? body.query.trim() : ''
-  if (!query) throw Object.assign(new Error('Enter a product, style, or shopping goal to search.'), { statusCode: 400 })
-  if (query.length > 240) throw Object.assign(new Error('Search queries must be 240 characters or fewer.'), { statusCode: 400 })
-  const maxPrice = body.maxPrice === undefined ? 2000 : Number(body.maxPrice)
-  if (!Number.isFinite(maxPrice) || maxPrice < 0 || maxPrice > 2000) throw Object.assign(new Error('Maximum price must be between $0 and $2,000.'), { statusCode: 400 })
-  if (body.cursor !== undefined && (typeof body.cursor !== 'string' || body.cursor.length > 2048)) throw Object.assign(new Error('Catalog cursor is invalid.'), { statusCode: 400 })
-  return { query, maxPrice, cursor: body.cursor }
-}
-
 async function api(req, res, pathname) {
-  if (req.method === 'GET' && pathname === '/api/health') {
-    return json(res, 200, { status: 'ok', shopify: 'live', jevConfigured: Boolean(process.env.TYPESAFE_API_KEY) })
-  }
-  if (req.method !== 'POST' || !['/api/search', '/api/recommendations'].includes(pathname)) {
-    return json(res, 404, { error: 'API route not found.' })
-  }
+  let body = {}
   try {
-    const input = validateInput(await readJson(req))
-    const result = pathname === '/api/search' ? await handleSearch(input) : await handleRecommendations(input)
-    return json(res, 200, result)
+    if (req.method === 'POST') body = await readJson(req)
   } catch (error) {
     const status = error.statusCode || 502
     return json(res, status, { error: status >= 500 ? 'The live catalog request failed. Please try again.' : error.message })
   }
+  const result = await dispatchApi(req.method, pathname, body)
+  return json(res, result.status, result.body)
 }
 
 async function start() {

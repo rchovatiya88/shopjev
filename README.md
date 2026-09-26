@@ -40,7 +40,13 @@ Exact Shopify product/variant GIDs use `lookup_catalog`. SKU-like searches run a
 | `SHOPIFY_AGENT_PROFILE_URL` | No | HTTPS URL for a hosted UCP platform profile. Defaults to Shopify's published valid Global Catalog profile fixture for development. |
 | `PORT` | No | HTTP server port; defaults to `5173`. |
 
-Do not add secrets to client-side Vite variables (such as `VITE_TYPESAFE_API_KEY`). For a deployed app, serve `public/ucp-agent-profile.json` from the app's HTTPS origin and set `SHOPIFY_AGENT_PROFILE_URL` to that URL. Shopify requires a fetchable profile served as JSON; GitHub's raw file URL responds with the wrong content type. Production deployment must use a Node server that can run `server/index.js`; static-only hosting cannot protect Jev credentials or serve the API routes.
+Do not add secrets to client-side Vite variables (such as `VITE_TYPESAFE_API_KEY`). For a deployed app, serve `public/ucp-agent-profile.json` from the app's HTTPS origin and set `SHOPIFY_AGENT_PROFILE_URL` to that URL. Shopify requires a fetchable profile served as JSON; GitHub's raw file URL responds with the wrong content type.
+
+## Deploy to Netlify
+
+The repository includes `netlify.toml` and Netlify Functions for `/api/search`, `/api/recommendations`, and `/api/health`. Connect the GitHub repository to Netlify; the build command and publish directory are configured in the file.
+
+To enable Jev after deployment, add `TYPESAFE_API_KEY` in the Netlify project environment variables and include the Functions runtime scope, then trigger a new deploy. Keep the key out of Git and out of browser variables. Shopify Global Catalog search does not need a Shopify API key. Without the Jev key, product search remains available and Jev recommendations stay disabled.
 
 ## Shopify data handling
 
