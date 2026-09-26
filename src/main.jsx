@@ -21,7 +21,8 @@ function productCategory(product) {
   const categories = Array.isArray(product.categories) ? product.categories : []
   const humanCategory = categories.find((item) => typeof item?.value === 'string' && !/^\d+$/.test(item.value))
   const category = product.category || product.product_type || humanCategory || categories[0]
-  return typeof category === 'string' ? category : category?.value || category?.name || category?.title || 'Shopify find'
+  const value = typeof category === 'string' ? category : category?.value || category?.name || category?.title
+  return value && !/^\d+$/.test(String(value)) ? value : 'Product'
 }
 
 function imageFor(product) {
@@ -87,7 +88,7 @@ function App() {
 
   useEffect(() => { searchCatalog(DEFAULT_QUERY) }, [])
 
-  const categoryOptions = useMemo(() => [...new Set(products.map(productCategory))].sort(), [products])
+  const categoryOptions = useMemo(() => [...new Set(products.map(productCategory).filter((category) => category !== 'Product'))].sort(), [products])
   const visibleProducts = useMemo(() => {
     let list = products.filter((product) => !categories.length || categories.includes(productCategory(product)))
     if (sort !== 'relevant') {
@@ -167,7 +168,7 @@ function App() {
       </div></div>
       <div className="content-grid"><aside className={`filter-panel ${mobileFilters ? 'mobile-open' : ''}`}>
         <div className="filter-heading"><h3>Refine</h3><button aria-label="Close filters" onClick={() => setMobileFilters(false)}><X size={16}/></button></div>
-        <div className="filter-group"><span>Categories in these results</span>{categoryOptions.length ? categoryOptions.map((category) => <label key={category}><input type="checkbox" checked={categories.includes(category)} onChange={() => setCategories((current) => current.includes(category) ? current.filter((value) => value !== category) : [...current, category])}/>{category}</label>) : <p className="muted-note">Categories appear with results.</p>}</div>
+        {categoryOptions.length > 1 && <div className="filter-group"><span>Categories in these results</span>{categoryOptions.map((category) => <label key={category}><input type="checkbox" checked={categories.includes(category)} onChange={() => setCategories((current) => current.includes(category) ? current.filter((value) => value !== category) : [...current, category])}/>{category}</label>)}</div>}
         <div className="filter-group"><label htmlFor="max-price">Maximum price</label><div className="range-labels"><span>$0</span><span>{maxPrice >= 2000 ? '$2,000+' : `$${maxPrice.toLocaleString()}`}</span></div><input id="max-price" type="range" min="50" max="2000" step="50" value={maxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} onMouseUp={() => searchCatalog(submitted, maxPrice)} onTouchEnd={() => searchCatalog(submitted, maxPrice)}/></div>
         <button className="clear-button" onClick={() => { setCategories([]); setMaxPrice(2000); searchCatalog(submitted, 2000) }}>Clear filters</button>
       </aside>
@@ -181,7 +182,7 @@ function App() {
           return <article className="product-card" key={product.id}>
             <div className="product-image-wrap">{image ? <img className="product-image" src={image.src} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.style.visibility = 'hidden'; event.currentTarget.parentElement.classList.add('image-unavailable') }}/> : <div className="image-placeholder">Image unavailable</div>}
               <button className={`icon-button save-button ${saved.includes(product.id) ? 'saved' : ''}`} aria-label={`${saved.includes(product.id) ? 'Unsave' : 'Save'} ${product.title}`} onClick={() => setSaved((current) => current.includes(product.id) ? current.filter((id) => id !== product.id) : [...current, product.id])}><Heart size={17} fill={saved.includes(product.id) ? 'currentColor' : 'none'}/></button>
-            </div><div className="product-info"><p className="eyebrow">{productCategory(product)} · {seller}</p><h3 title={product.title}>{product.title}</h3><div className="price-row"><span className="price">{money(price.amount, price.currency)}</span>{product.price_range?.max?.amount > product.price_range?.min?.amount && <span className="price-range">– {money(product.price_range.max.amount, product.price_range.max.currency)}</span>}</div>
+            </div><div className="product-info"><p className="eyebrow">{productCategory(product) === 'Product' ? seller : `${productCategory(product)} · ${seller}`}</p><h3 title={product.title}>{product.title}</h3><div className="price-row"><span className="price">{money(price.amount, price.currency)}</span>{product.price_range?.max?.amount > product.price_range?.min?.amount && <span className="price-range">– {money(product.price_range.max.amount, product.price_range.max.currency)}</span>}</div>
               {price.variant?.sku && <p className="sku-line">SKU {price.variant.sku}</p>}
               {productUrl ? <a className="text-button product-link" href={productUrl} target="_blank" rel="noreferrer">View at {seller} <ExternalLink size={12}/></a> : <span className="muted-note">Merchant link unavailable</span>}
             </div>
