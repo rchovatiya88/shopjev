@@ -4,6 +4,11 @@ import { Search, Heart, Sparkles, SlidersHorizontal, X, ChevronLeft, ChevronRigh
 import './styles.css'
 
 const DEFAULT_QUERY = 'mid-century modern bedroom'
+const QUICK_SEARCH_GROUPS = [
+  { title: 'Style & mood', terms: ['Mid-century modern living room', 'Quiet luxury bedroom', 'Warm minimalist home decor', 'Coastal grandmother style', 'Dark academia desk setup', 'Scandinavian dining room', 'Colorful maximalist accents', 'Earthy boho apartment'] },
+  { title: 'Shop by room', terms: ['Small-space entryway storage', 'Cozy reading nook essentials', 'Guest bedroom refresh', 'Balcony furniture for two', 'Home office upgrades', 'A better-organized closet', 'Soft lighting for a bedroom', 'Small bathroom storage'] },
+  { title: 'Gifts & everyday', terms: ['Gift for grandma', 'Gift for a new homeowner', 'Thoughtful gifts under $50', 'Gifts for someone who loves cooking', 'Comfortable walking shoes', 'Everyday white sneakers', 'A versatile black work bag', 'Lightweight layers for travel', 'Wedding guest outfit', 'Durable carry-on luggage', 'Coffee table under $100', 'Blackout curtains for better sleep', 'Useful gifts for college students', 'Rain jacket for city commuting'] },
+]
 
 function money(amount, currency = 'USD') {
   if (!Number.isFinite(amount)) return 'Price unavailable'
@@ -173,6 +178,13 @@ function App() {
       </div></div>
       <div className="content-grid"><aside className={`filter-panel ${mobileFilters ? 'mobile-open' : ''}`}>
         <div className="filter-heading"><h3>Refine</h3><button aria-label="Close filters" onClick={() => setMobileFilters(false)}><X size={16}/></button></div>
+        <div className="quick-searches" aria-label="Popular searches">
+          <div className="quick-searches-heading"><span>Quick searches</span><small>Tap to explore</small></div>
+          {QUICK_SEARCH_GROUPS.map((group) => <section className="quick-search-group" key={group.title}>
+            <h4>{group.title}</h4>
+            <div className="quick-search-list">{group.terms.map((term) => <button key={term} className={`quick-search-chip ${submitted === term ? 'active' : ''}`} aria-pressed={submitted === term} onClick={() => { setQuery(term); setCategories([]); searchCatalog(term, 2000); setMobileFilters(false) }}>{term}</button>)}</div>
+          </section>)}
+        </div>
         {categoryOptions.length > 1 && <div className="filter-group"><span>Categories in these results</span>{categoryOptions.map((category) => <label key={category}><input type="checkbox" checked={categories.includes(category)} onChange={() => setCategories((current) => current.includes(category) ? current.filter((value) => value !== category) : [...current, category])}/>{category}</label>)}</div>}
         <div className="filter-group"><label htmlFor="max-price">Maximum price</label><div className="range-labels"><span>$0</span><span>{maxPrice >= 2000 ? '$2,000+' : `$${maxPrice.toLocaleString()}`}</span></div><input id="max-price" type="range" min="50" max="2000" step="50" value={maxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} onMouseUp={() => searchCatalog(submitted, maxPrice)} onTouchEnd={() => searchCatalog(submitted, maxPrice)}/></div>
         <button className="clear-button" onClick={() => { setCategories([]); setMaxPrice(2000); searchCatalog(submitted, 2000) }}>Clear filters</button>
